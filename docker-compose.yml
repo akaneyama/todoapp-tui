@@ -1,0 +1,41 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpass}
+      MARIADB_DATABASE: todoapp
+      MARIADB_USER: todoapp
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-todoapp}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      # Creates the todoapp_test database used by integration tests.
+      - ./deploy/mariadb-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      APP_ADDR: ":8080"
+      DB_DSN: "todoapp:${MARIADB_PASSWORD:-todoapp}@tcp(mariadb:3306)/todoapp"
+      AUTO_MIGRATE: "true"
+      LOG_LEVEL: "info"
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  mariadb-data:
